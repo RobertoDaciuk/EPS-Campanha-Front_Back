@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Sistema de campanhas de incentivo EPS - Gerencie vendas, ganhe pontos e resgate prêmios incríveis" />
+    <meta name="keywords" content="campanhas, incentivo, vendas, pontos, prêmios, EPS" />
+    <meta name="author" content="DevEPS" />
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="EPS Campanhas - Sistema de Incentivo" />
+    <meta property="og:description" content="Gerencie vendas, ganhe pontos e resgate prêmios incríveis" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/og-image.png" />
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="EPS Campanhas - Sistema de Incentivo" />
+    <meta name="twitter:description" content="Gerencie vendas, ganhe pontos e resgate prêmios incríveis" />
+    
+    <!-- Theme -->
+    <meta name="theme-color" content="#0ea5e9" />
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <title>EPS Campanhas - Sistema de Incentivo</title>
+    
+    <style>
+      /* Loading screen inicial */
+      #initial-loading {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        font-family: 'Inter', sans-serif;
+      }
+      
+      .loading-content {
+        text-align: center;
+      }
+      
+      .loading-logo {
+        width: 64px;
+        height: 64px;
+        background: #0ea5e9;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+        animation: pulse 2s ease-in-out infinite;
+      }
+      
+      .loading-text {
+        color: #0369a1;
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      
+      .loading-subtitle {
+        color: #075985;
+        font-size: 14px;
+      }
+      
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+      }
+      
+      body {
+        font-family: 'Inter', sans-serif;
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Loading inicial -->
+    <div id="initial-loading">
+      <div class="loading-content">
+        <div class="loading-logo">
+          <span style="color: white; font-size: 32px; font-weight: bold;">E</span>
+        </div>
+        <div class="loading-text">EPS Campanhas</div>
+        <div class="loading-subtitle">Carregando sistema...</div>
+      </div>
+    </div>
+    
+    <!-- React app -->
+    <div id="root"></div>
+    
+    <script>
+      // Remove loading screen quando React carregar
+      window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+          const loading = document.getElementById('initial-loading');
+          if (loading) {
+            loading.style.opacity = '0';
+            setTimeout(() => loading.remove(), 300);
+          }
+        }, 1000);
+      });
+    </script>
+    
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

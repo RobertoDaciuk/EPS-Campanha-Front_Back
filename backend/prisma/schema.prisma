@@ -1,0 +1,406 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  ADMIN
+  GERENTE
+  VENDEDOR
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum CampaignStatus {
+  ATIVA
+  CONCLUIDA
+  EXPIRADA
+}
+
+enum CampaignKitStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum CampaignSubmissionStatus {
+  PENDING
+  VALIDATED
+  REJECTED
+}
+
+enum GoalUnitType {
+  UNIT
+  PAIR
+}
+
+enum RuleOperator {
+  CONTAINS
+  NOT_CONTAINS
+  EQUALS
+  NOT_EQUALS
+  GREATER_THAN
+  LESS_THAN
+}
+
+enum TargetField {
+  IGNORE
+  ORDER_ID
+  ORDER_ID_2
+  ORDER_ID_3
+  SALE_DATE
+  SELLER_CPF
+  OPTIC_CNPJ
+  PRODUCT_NAME
+  SALE_VALUE
+}
+
+enum ValidationStatus {
+  PROCESSANDO
+  CONCLUIDO
+  FALHOU
+}
+
+enum ResultRowStatus {
+  VALID
+  ERROR
+  WARNING
+}
+
+enum DuplicateHandlingStrategy {
+  IGNORE
+  OVERWRITE
+  REJECT_ROW
+}
+
+enum EarningStatus {
+  PENDENTE
+  PAGO
+}
+
+enum EarningType {
+  SELLER
+  MANAGER
+}
+
+enum ActivityType {
+  VENDA
+  CONQUISTA
+  PREMIO_RESGATADO
+  ADMIN_CAMPAIGN_CREATED
+  ADMIN_VALIDATION_PROCESSED
+  ADMIN_USER_BLOCKED
+}
+
+// ==================== MODELS PRINCIPAIS ====================
+
+model User {
+  id                String      @id @default(cuid())
+  name              String
+  email             String      @unique
+  passwordHash      String
+  cpf               String      @unique
+  whatsapp          String
+  avatarUrl         String
+  role              UserRole
+  status            UserStatus  @default(ACTIVE)
+  opticName         String
+  opticCNPJ         String
+  level             String      @default("Bronze")
+  points            Int         @default(0)
+  pointsToNextLevel Int         @default(1000)
+  managerId         String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  // Relations
+  manager           User?                    @relation("ManagerSeller", fields: [managerId], references: [id])
+  sellers           User[]                   @relation("ManagerSeller")
+  campaignKits      CampaignKit[]
+  submissions       CampaignSubmission[]
+  earnings          Earning[]
+  activityItems     ActivityItem[]
+  notifications     Notification[]
+
+  // Índices
+  @@index([email])
+  @@index([cpf])
+  @@index([role, status])
+  @@index([managerId])
+  @@index([opticCNPJ])
+  @@index([points])
+  
+  @@map("User")
+}
+
+model Campaign {
+  id                      String           @id @default(cuid())
+  title                   String
+  description             String
+  imageUrl                String
+  startDate               DateTime
+  endDate                 DateTime
+  status                  CampaignStatus   @default(ATIVA)
+  pointsOnCompletion      Int?
+  managerPointsPercentage Float?
+  
+  // Legacy fields for compatibility
+  points                  Int?
+  goal                    Int?
+  progress                Int?             @default(0)
+  
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+
+  // Relations
+  goalRequirements        GoalRequirement[]
+  campaignKits            CampaignKit[]
+  submissions             CampaignSubmission[]
+  earnings                Earning[]
+
+  // Índices
+  @@index([status])
+  @@index([startDate, endDate])
+  @@index([createdAt])
+
+  @@map("Campaign")
+}
+
+model GoalRequirement {
+  id          String        @id @default(cuid())
+  description String
+  quantity    Int
+  unitType    GoalUnitType
+  campaignId  String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  campaign    Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  conditions  RuleCondition[]
+  submissions CampaignSubmission[]
+
+  // Índices
+  @@index([campaignId])
+
+  @@map("GoalRequirement")
+}
+
+model RuleCondition {
+  id                String          @id @default(cuid())
+  field             TargetField
+  operator          RuleOperator
+  value             String
+  goalRequirementId String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  // Relations
+  goalRequirement   GoalRequirement @relation(fields: [goalRequirementId], references: [id], onDelete: Cascade)
+
+  // Índices
+  @@index([goalRequirementId])
+
+  @@map("RuleCondition")
+}
+
+model CampaignKit {
+  id         String            @id @default(cuid())
+  status     CampaignKitStatus @default(IN_PROGRESS)
+  campaignId String
+  userId     String
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  // Relations
+  campaign    Campaign              @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submissions CampaignSubmission[]
+
+  // Índices
+  @@index([campaignId, userId])
+  @@index([status])
+
+  @@unique([campaignId, userId])
+  @@map("CampaignKit")
+}
+
+model CampaignSubmission {
+  id               String                   @id @default(cuid())
+  orderNumber      String                   @unique
+  quantity         Int                      @default(1)
+  status           CampaignSubmissionStatus @default(PENDING)
+  submissionDate   DateTime                 @default(now())
+  validationMessage String?
+  notes            String?
+
+  campaignId       String
+  userId           String
+  requirementId    String
+  kitId            String
+  
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  // Relations
+  campaign         Campaign                 @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user             User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requirement      GoalRequirement          @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  kit              CampaignKit              @relation(fields: [kitId], references: [id], onDelete: Cascade)
+
+  // Índices
+  @@index([orderNumber])
+  @@index([status])
+  @@index([userId])
+  @@index([campaignId])
+  @@index([submissionDate])
+  @@index([kitId])
+
+  @@map("CampaignSubmission")
+}
+
+// ==================== MODELS FINANCEIROS ====================
+
+model Earning {
+  id                String        @id @default(cuid())
+  type              EarningType
+  userId            String
+  userName          String
+  userAvatarUrl     String
+  campaignId        String
+  campaignTitle     String
+  kitId             String
+  sourceUserName    String?
+  amount            Float
+  earningDate       DateTime      @default(now())
+  status            EarningStatus @default(PENDENTE)
+  description       String?
+  metadata          Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign          Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // Índices
+  @@index([userId])
+  @@index([status])
+  @@index([earningDate])
+  @@index([campaignId])
+  @@index([type])
+
+  @@map("Earning")
+}
+
+model Premio {
+  id             String   @id @default(cuid())
+  title          String
+  description    String
+  imageUrl       String
+  pointsRequired Int
+  stock          Int      @default(0)
+  category       String?
+  isActive       Boolean  @default(true)
+  priority       Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Índices
+  @@index([isActive])
+  @@index([pointsRequired])
+  @@index([stock])
+  @@index([category])
+  @@index([priority])
+
+  @@map("Premio")
+}
+
+// ==================== MODELS DE SISTEMA ====================
+
+model ActivityItem {
+  id          String       @id @default(cuid())
+  userId      String
+  type        ActivityType
+  description String
+  points      Int?
+  value       Float?
+  timestamp   DateTime     @default(now())
+  metadata    Json?
+
+  // Relations
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Índices
+  @@index([userId])
+  @@index([type])
+  @@index([timestamp])
+
+  @@map("ActivityItem")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  type      String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Índices
+  @@index([userId])
+  @@index([isRead])
+
+  @@map("Notification")
+}
+
+// ==================== MODELS DE VALIDAÇÃO ====================
+
+model ValidationJob {
+  id                   String            @id @default(cuid())
+  fileName             String
+  uploadDate           DateTime          @default(now())
+  status               ValidationStatus  @default(PROCESSANDO)
+  campaignTitle        String
+  isDryRun             Boolean           @default(true)
+  totalRows            Int               @default(0)
+  validatedSales       Int               @default(0)
+  errors               Int               @default(0)
+  warnings             Int               @default(0)
+  pointsDistributed    Float             @default(0)
+  details              Json?
+  campaignId           String?
+  adminId              String
+  processingStarted    DateTime?
+  processingCompleted  DateTime?
+  processingDuration   Int?
+  fileSize             Int?
+  rowsProcessed        Int?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  // Índices
+  @@index([status])
+  @@index([adminId])
+  @@index([uploadDate])
+  @@index([campaignId])
+
+  @@map("ValidationJob")
+}

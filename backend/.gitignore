@@ -1,0 +1,186 @@
+# ==================== NODE.JS ====================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.npm
+.yarn-integrity
+
+# ==================== RUNTIME DATA ====================
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# ==================== COVERAGE DIRECTORY ====================
+lib-cov
+coverage
+*.lcov
+.nyc_output
+
+# ==================== DEPENDENCY DIRECTORIES ====================
+node_modules/
+jspm_packages/
+
+# ==================== TYPESCRIPT ====================
+*.tsbuildinfo
+dist/
+build/
+out/
+
+# ==================== ENVIRONMENT VARIABLES ====================
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+
+# ==================== LOGS ====================
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pino-*.log
+
+# ==================== DATABASE ====================
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Prisma
+prisma/migrations/*
+!prisma/migrations/.gitkeep
+prisma/dev.db*
+
+# ==================== IDE & EDITORS ====================
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ==================== OS GENERATED FILES ====================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ==================== TESTING ====================
+coverage/
+.nyc_output/
+jest-coverage/
+
+# ==================== CACHE ====================
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.vuepress/dist
+
+# ==================== TEMPORARY FILES ====================
+*.tmp
+*.temp
+temp/
+tmp/
+
+# ==================== UPLOADS & USER GENERATED ====================
+uploads/
+files/
+public/uploads/
+storage/
+
+# ==================== BACKUP FILES ====================
+*.bak
+*.backup
+*.old
+
+# ==================== DOCKER ====================
+.dockerignore
+docker-compose.override.yml
+
+# ==================== SECURITY ====================
+*.pem
+*.key
+*.crt
+*.csr
+
+# ==================== LOCAL CONFIG ====================
+config/local.json
+config/development.json
+config/production.json
+
+# ==================== DOCUMENTATION BUILD ====================
+docs/build/
+docs/dist/
+
+# ==================== PACKAGE MANAGERS ====================
+.pnpm-debug.log*
+.pnpm-store/
+
+# Yarn
+.yarn/*
+!.yarn/cache
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# ==================== PROJECT SPECIFIC ====================
+# Validation files uploads
+validation-uploads/
+validation-results/
+
+# Export files
+exports/
+reports/
+
+# SSL certificates
+ssl/
+
+# Local development database
+dev.db*
+test.db*
+
+# IDE specific
+.fleet/
+.vscode/settings.json
+
+# MacOS
+.AppleDouble
+.LSOverride
+
+# Windows
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ==================== MONITORING & ANALYTICS ====================
+.sentry-cli.log
+
+# ==================== CUSTOM APP SPECIFIC ====================
+# EPS specific files
+eps-*.log
+validation-*.xlsx
+validation-*.csv
+import-*.json
+
+# User generated content
+user-uploads/
+avatar-uploads/
+campaign-images/
+premio-images/
