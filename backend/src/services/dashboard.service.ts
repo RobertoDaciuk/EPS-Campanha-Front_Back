@@ -13,6 +13,7 @@
  * 'usersChange', 'campaignsChange', 'submissionsChange'. Retorna 'null' se o valor anterior for 0.
  */
 
+import { AppError } from '../errors/AppError';
 import { prisma, prismaUtils } from '../../lib/prismaClient';
 import {
   UserRole,
@@ -618,87 +619,91 @@ export const getAdminDashboardData = async (
  * @param userId Opcional: ID do usuário para destacar no ranking
  * @param limit Opcional: Número de entradas a retornar
  */
-export const getRankingData = async (
-    filter: 'Geral' | 'Mensal' | 'Semanal' = 'Geral',
-    userId?: string,
-    limit: number = 10
-): Promise<RankingEntry[]> => {
-    try {
-        let dateFilter = {};
-        if (filter === 'Mensal') {
-            const { startDate } = prismaUtils.calculateDateRange('30d'); // Aproximação mensal
-            dateFilter = { gte: startDate };
-        } else if (filter === 'Semanal') {
-            const { startDate } = prismaUtils.calculateDateRange('7d');
-            dateFilter = { gte: startDate };
-        }
+export const getRankingData = async (options: {
+  filter?: 'Geral' | 'Mensal' | 'Semanal';
+  limit?: number;
+  page?: number;
+  userId?: string;
+}) => {
+  const { filter = 'Geral', limit = 10, page = 1, userId } = options;
+  const { skip, take } = prismaUtils.buildPagination(page, limit);
 
-        // Query base para vendedores ativos
-         const baseQuery = {
-             where: { role: UserRole.VENDEDOR, status: UserStatus.ACTIVE },
-             select: {
-                 id: true, name: true, avatarUrl: true, opticName: true, points: true,
-             },
-             orderBy: { points: 'desc' as const }, // Ordena por pontos gerais sempre
-             take: filter === 'Geral' ? limit : undefined // Limita apenas no geral por enquanto
-         };
+  // Lógica de filtro de data
+  let dateFilter = {};
+  if (filter === 'Mensal') {
+    const { startDate } = prismaUtils.calculateDateRange('30d');
+    dateFilter = { gte: startDate };
+  } else if (filter === 'Semanal') {
+    const { startDate } = prismaUtils.calculateDateRange('7d');
+    dateFilter = { gte: startDate };
+  }
 
-        // Busca vendedores ordenados por pontos gerais
-        let rankedSellers = await prisma.user.findMany(baseQuery);
+  // Subquery para calcular pontos e vendas no período
+  const periodSubQuery = filter !== 'Geral' ? `
+    ,
+    (SELECT COALESCE(SUM(points), 0) FROM "ActivityItem" WHERE "userId" = u.id AND timestamp >= '${(dateFilter as any).gte?.toISOString()}' AND points > 0) as "pointsPeriod",
+    (SELECT COALESCE(SUM(value), 0) FROM "CampaignSubmission" WHERE "userId" = u.id AND status = 'VALIDATED' AND "validatedAt" >= '${(dateFilter as any).gte?.toISOString()}') as "salesPeriodValue"
+  ` : '';
 
-        // Se o filtro não for 'Geral', busca pontos/vendas do período
-        if (filter !== 'Geral') {
-             const sellerIds = rankedSellers.map(s => s.id);
+  // Ordenação
+  const orderBy = filter === 'Geral' ? 'points DESC' : '"pointsPeriod" DESC';
 
-            // Busca pontos ganhos no período
-             const pointsPeriod = await prisma.activityItem.groupBy({
-                 by: ['userId'],
-                 where: { userId: { in: sellerIds }, timestamp: dateFilter, points: { gt: 0 } },
-                 _sum: { points: true },
-             });
+  const rankedSellers = await prisma.$queryRawUnsafe(`
+    SELECT
+      u.id,
+      u.name,
+      u."avatarUrl",
+      u."opticName",
+      u.points
+      ${periodSubQuery}
+    FROM "User" u
+    WHERE u.role = 'VENDEDOR' AND u.status = 'ACTIVE'
+    ORDER BY ${orderBy}
+    LIMIT ${take}
+    OFFSET ${skip}
+  `);
 
-            // Busca vendas validadas no período
-             const salesPeriod = await prisma.campaignSubmission.groupBy({
-                 by: ['userId'],
-                 where: { userId: { in: sellerIds }, status: CampaignSubmissionStatus.VALIDATED, validatedAt: dateFilter },
-                 _sum: { value: true },
-                 _count: { id: true } // Contagem de vendas
-             });
+  const total = await prisma.user.count({ where: { role: 'VENDEDOR', status: 'ACTIVE' } });
 
-            // Mapeia os dados do período para os vendedores
-             const pointsMap = new Map(pointsPeriod.map(p => [p.userId, p._sum.points || 0]));
-             const salesMap = new Map(salesPeriod.map(s => [s.userId, { value: s._sum.value || 0, count: s._count.id || 0 }]));
+  const formattedRanking = (rankedSellers as any[]).map((seller, index) => ({
+    rank: skip + index + 1,
+    userId: seller.id,
+    name: seller.name,
+    avatarUrl: seller.avatarUrl || '',
+    opticName: seller.opticName,
+    points: filter === 'Geral' ? seller.points : (seller as any).pointsPeriod,
+    sales: filter === 'Geral' ? 0 : (seller as any).salesPeriodValue,
+    isCurrentUser: seller.id === userId,
+  }));
 
-
-            // Atualiza vendedores com dados do período e reordena
-            rankedSellers = rankedSellers.map(seller => ({
-                ...seller,
-                pointsPeriod: pointsMap.get(seller.id) || 0,
-                salesPeriodValue: salesMap.get(seller.id)?.value || 0,
-                salesPeriodCount: salesMap.get(seller.id)?.count || 0,
-            })).sort((a, b) => (b.pointsPeriod) - (a.pointsPeriod)); // Reordena por pontos do período
-
-            // Aplica limite após reordenar
-            rankedSellers = rankedSellers.slice(0, limit);
-        }
-
-
-        // Formata o resultado final
-        return rankedSellers.map((seller, index) => ({
-            rank: index + 1,
-            userId: seller.id,
-            name: seller.name,
-            avatarUrl: seller.avatarUrl || '',
-            opticName: seller.opticName,
-            points: filter === 'Geral' ? seller.points : (seller as any).pointsPeriod, // Mostra pontos gerais ou do período
-            sales: filter === 'Geral' ? 0 : (seller as any).salesPeriodValue, // Mostra vendas do período
-            // progress: 0 // Progresso médio precisaria de outra query complexa
-        }));
-
-    } catch (error) {
-        console.error(`[DASHBOARD_SERVICE] Erro ao buscar ranking (${filter}):`, error);
-        throw new Error('Falha ao carregar dados do ranking.');
+  let currentUserPosition = null;
+  if (userId) {
+    const userRankResult = await prisma.$queryRawUnsafe(`
+    WITH UserRank AS (
+      SELECT
+        u.id,
+        RANK() OVER (ORDER BY ${orderBy}) as position
+        ${periodSubQuery}
+      FROM "User" u
+      WHERE u.role = 'VENDEDOR' AND u.status = 'ACTIVE'
+    )
+    SELECT position FROM UserRank WHERE id = '${userId}'
+  `);
+    const userRank = (userRankResult as any)[0];
+    if (userRank) {
+      currentUserPosition = {
+        userId,
+        position: userRank.position,
+        ...formattedRanking.find(u => u.userId === userId)
+      };
     }
+  }
+
+  return {
+    ranking: formattedRanking,
+    currentUserPosition,
+    pagination: prismaUtils.getPaginationInfo(page, limit, total),
+  };
 };
 
 /**

@@ -7,6 +7,7 @@
 
 import { prisma } from '../../lib/prismaClient';
 import { Earning, EarningStatus } from '@prisma/client';
+import { AppError } from '../errors/AppError';
 
 /**
  * @function getAllEarnings

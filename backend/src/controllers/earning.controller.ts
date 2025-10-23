@@ -102,15 +102,7 @@ export const createEarningHandler = async (
   reply: FastifyReply
 ): Promise<void> => {
   try {
-    if (!request.user || request.user.role !== UserRole.ADMIN) {
-      return reply.code(403).send({
-        success: false,
-        error: 'Acesso negado',
-        message: 'Apenas administradores podem criar earnings manualmente',
-      });
-    }
-
-    const earning = await createEarning(request.body);
+    const earning = await createEarning(request.body, request.user!.id);
 
     console.log(`[EARNING_CONTROLLER] Earning criado: ${earning.id} (${earning.type}) por ${request.user.email}`);
 

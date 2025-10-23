@@ -15,9 +15,11 @@
  */
 
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { 
-  loginSchema, 
-  registerSchema, 
+import { prisma } from '../../lib/prismaClient';
+import { UserRole } from '@prisma/client';
+import {
+  loginSchema,
+  registerSchema,
   changePasswordSchema,
   updateProfileSchema,
   checkEmailSchema,
@@ -31,9 +33,9 @@ import {
   CheckCPFData,
   ValidateCNPJData
 } from '../schemas/auth.schema';
-import { 
-  loginUser, 
-  registerUser, 
+import {
+  loginUser,
+  registerUser,
   changeUserPassword,
   updateUserProfile,
   refreshAuthToken,
@@ -41,8 +43,9 @@ import {
   checkEmailAvailability,
   checkCPFAvailability,
   getOpticDataByCNPJ,
-  getLoginAttemptStats
-} from '../services/auth.service';
+  getLoginAttemptStats,
+  getUserById,
+} from '../services/user.service';
 
 // ==================== INTERFACES DE REQUEST ====================
 
@@ -267,71 +270,6 @@ export const updateProfileHandler = async (
   }
 };
 
-/**
- * Handler para verificar disponibilidade de email
- */
-export const checkEmailHandler = async (
-  request: CheckEmailRequest,
-  reply: FastifyReply
-): Promise<void> => {
-  try {
-    const { email } = request.body;
-    const excludeUserId = request.user?.id; // Se autenticado, exclui próprio usuário
-
-    const isAvailable = await checkEmailAvailability(email, excludeUserId);
-
-    return reply.code(200).send({
-      success: true,
-      data: {
-        email,
-        available: isAvailable,
-        message: isAvailable ? 'E-mail disponível' : 'E-mail já está em uso',
-      },
-    });
-
-  } catch (error) {
-    console.error('[AUTH_CONTROLLER] Erro ao verificar email:', error);
-
-    return reply.code(500).send({
-      success: false,
-      error: 'Erro interno',
-      message: 'Erro ao verificar disponibilidade do e-mail',
-    });
-  }
-};
-
-/**
- * Handler para verificar disponibilidade de CPF
- */
-export const checkCPFHandler = async (
-  request: CheckCPFRequest,
-  reply: FastifyReply
-): Promise<void> => {
-  try {
-    const { cpf } = request.body;
-    const excludeUserId = request.user?.id;
-
-    const isAvailable = await checkCPFAvailability(cpf, excludeUserId);
-
-    return reply.code(200).send({
-      success: true,
-      data: {
-        cpf,
-        available: isAvailable,
-        message: isAvailable ? 'CPF disponível' : 'CPF já está cadastrado',
-      },
-    });
-
-  } catch (error) {
-    console.error('[AUTH_CONTROLLER] Erro ao verificar CPF:', error);
-
-    return reply.code(500).send({
-      success: false,
-      error: 'Erro interno',
-      message: 'Erro ao verificar disponibilidade do CPF',
-    });
-  }
-};
 
 /**
  * Handler para validar CNPJ de ótica
@@ -425,22 +363,21 @@ export const logoutHandler = async (
   reply: FastifyReply
 ): Promise<void> => {
   try {
-    if (request.isAuthenticated && request.user) {
+    if (request.user) {
       await logoutUser(request.user.id);
       console.log(`[AUTH_CONTROLLER] Logout realizado: ${request.user.email}`);
     }
-
     return reply.code(200).send({
       success: true,
       message: 'Logout realizado com sucesso',
     });
-
   } catch (error) {
     console.error('[AUTH_CONTROLLER] Erro no logout:', error);
-
-    return reply.code(200).send({
-      success: true,
-      message: 'Logout realizado (com avisos)',
+    // Mesmo em caso de erro, o cliente deve ser deslogado
+    return reply.code(500).send({
+      success: false,
+      error: 'Erro interno no logout',
+      message: 'Ocorreu um erro ao invalidar a sessão, mas o cliente foi deslogado.',
     });
   }
 };
@@ -496,70 +433,25 @@ export const getMeHandler = async (
   reply: FastifyReply
 ): Promise<void> => {
   try {
-    if (!request.isAuthenticated || !request.user) {
-      return reply.code(401).send({
-        success: false,
-        error: 'Não autenticado',
-        message: 'Token inválido ou expirado',
-      });
-    }
-
-    // Busca dados completos do usuário
-    const fullUser = await prisma.user.findUnique({
-      where: { id: request.user.id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        cpf: true,
-        whatsapp: true,
-        avatarUrl: true,
-        role: true,
-        status: true,
-        opticName: true,
-        opticCNPJ: true,
-        level: true,
-        points: true,
-        pointsToNextLevel: true,
-        managerId: true,
-        createdAt: true,
-        updatedAt: true,
-        manager: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        _count: {
-          select: {
-            sellers: true,
-          },
-        },
-      },
-    });
-
+    const fullUser = await getUserById(request.user!.id);
     if (!fullUser) {
       return reply.code(404).send({
         success: false,
         error: 'Usuário não encontrado',
-        message: 'Dados do usuário não foram encontrados',
+        message: 'Dados do usuário não foram encontrados no sistema.',
       });
     }
-
     return reply.code(200).send({
       success: true,
       message: 'Dados do usuário obtidos com sucesso',
       data: { user: fullUser },
     });
-
   } catch (error) {
     console.error('[AUTH_CONTROLLER] Erro ao obter dados do usuário:', error);
-
     return reply.code(500).send({
       success: false,
-      error: 'Erro interno',
-      message: 'Erro ao obter dados do usuário',
+      error: 'Erro Interno',
+      message: 'Não foi possível obter os dados do usuário.',
     });
   }
 };
