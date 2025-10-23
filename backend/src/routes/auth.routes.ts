@@ -47,12 +47,23 @@ import {
 } from '../controllers/auth.controller';
 import { authenticate, optionalAuth } from '../middleware/auth.middleware';
 
-// ---- ADICIONE O SCHEMA ZOD DA RESPOSTA DO LOGIN --- //
+const userResponseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  role: z.string(),
+  status: z.string(),
+  opticName: z.string(),
+  avatarUrl: z.string(),
+  level: z.string(),
+  points: z.number(),
+});
+
 const loginResponseSchema = z.object({
   success: z.boolean(),
   message: z.string(),
   data: z.object({
-    user: z.any(),
+    user: userResponseSchema,
     token: z.string(),
     refreshToken: z.string(),
     expiresAt: z.string(),
@@ -78,7 +89,7 @@ export async function authRoutes(
       tags: ['Autenticação'],
       body: loginSchema,
       response: {
-        200: loginResponseSchema,          // AJUSTE AQUI!
+        200: loginResponseSchema,
         401: z.object({
           success: z.boolean(),
           error: z.string(),
@@ -131,62 +142,6 @@ export async function authRoutes(
   }, registerHandler);
 
   /**
-   * POST /api/auth/check-email
-   * Verificação de disponibilidade de e-mail via POST
-   */
-  fastify.post('/check-email', {
-    schema: {
-      description: 'Verifica disponibilidade de e-mail',
-      tags: ['Validação'],
-      body: checkEmailSchema,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                email: { type: 'string' },
-                available: { type: 'boolean' },
-                message: { type: 'string' },
-              },
-            },
-          },
-        },
-      },
-    },
-  }, checkEmailHandler);
-
-  /**
-   * POST /api/auth/check-cpf
-   * Verificação de disponibilidade de CPF via POST
-   */
-  fastify.post('/check-cpf', {
-    schema: {
-      description: 'Verifica disponibilidade de CPF',
-      tags: ['Validação'],
-      body: checkCPFSchema,
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                cpf: { type: 'string' },
-                available: { type: 'boolean' },
-                message: { type: 'string' },
-              },
-            },
-          },
-        },
-      },
-    },
-  }, checkCPFHandler);
-
-  /**
    * POST /api/auth/validate-cnpj
    * Validação de CNPJ de ótica via POST
    */
@@ -224,14 +179,10 @@ export async function authRoutes(
     schema: {
       description: 'Verifica disponibilidade de e-mail (GET)',
       tags: ['Validação'],
-      querystring: {
-        type: 'object',
-        properties: {
-          email: { type: 'string', format: 'email' },
-          excludeUserId: { type: 'string', format: 'uuid' },
-        },
-        required: ['email'],
-      },
+      querystring: z.object({
+          email: z.string().email(),
+          excludeUserId: z.string().uuid().optional(),
+      }),
     },
   }, checkEmailAvailabilityHandler);
 
@@ -243,14 +194,10 @@ export async function authRoutes(
     schema: {
       description: 'Verifica disponibilidade de CPF (GET)',
       tags: ['Validação'],
-      querystring: {
-        type: 'object',
-        properties: {
-          cpf: { type: 'string' },
-          excludeUserId: { type: 'string', format: 'uuid' },
-        },
-        required: ['cpf'],
-      },
+      querystring: z.object({
+          cpf: z.string(),
+          excludeUserId: z.string().uuid().optional(),
+      }),
     },
   }, checkCPFAvailabilityHandler);
 

@@ -18,21 +18,23 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { prisma, PrismaTransactionClient } from '../../lib/prismaClient';
 import { UserRole, UserStatus } from '@prisma/client';
-import { 
-  LoginData, 
-  UserRegistrationData, 
+import {
+  LoginData,
+  UserRegistrationData,
   ChangePasswordData,
-  UpdateProfileData 
+  UpdateProfileData
 } from '../schemas/auth.schema';
-import { 
-  normalizeCPF, 
-  normalizeCNPJ, 
-  normalizePhone, 
+import {
+  normalizeCPF,
+  normalizeCNPJ,
+  normalizePhone,
   normalizeEmail,
   normalizeName,
   isValidCPF,
-  isValidCNPJ 
+  isValidCNPJ
 } from '../utils/normalizers';
+import { AppError } from '../errors/AppError';
+import { createLimiter } from '../lib/rateLimiter';
 
 // ==================== INTERFACES E TIPOS ====================
 
@@ -84,8 +86,12 @@ interface CreatedUser {
 /**
  * Configurações de JWT e segurança
  */
+if (!process.env.JWT_SECRET) {
+  throw new AppError('A variável de ambiente JWT_SECRET não está definida.', 500);
+}
+
 const JWT_CONFIG = {
-  SECRET: process.env.JWT_SECRET || 'super-secret-key-for-development-only',
+  SECRET: process.env.JWT_SECRET,
   EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   REFRESH_EXPIRES_IN: '30d',
   ALGORITHM: 'HS256' as const,
@@ -93,92 +99,15 @@ const JWT_CONFIG = {
   AUDIENCE: 'eps-campanhas-users',
 };
 
-/**
- * Configurações de bcrypt
- */
 const BCRYPT_CONFIG = {
   SALT_ROUNDS: 12,
 };
 
-/**
- * Configurações de rate limiting
- */
-const RATE_LIMIT_CONFIG = {
-  MAX_LOGIN_ATTEMPTS: 5,
-  LOCKOUT_DURATION: 15 * 60 * 1000, // 15 minutos
-  CLEANUP_INTERVAL: 60 * 60 * 1000, // 1 hora
-};
-
-// ==================== CACHE DE TENTATIVAS DE LOGIN ====================
-
-/**
- * Cache para controle de tentativas de login
- */
-class LoginAttemptsCache {
-  private static attempts = new Map<string, { count: number; lockedUntil?: number }>();
-
-  /**
-   * Registra uma tentativa de login falhada
-   */
-  static recordFailedAttempt(email: string): void {
-    const attempt = this.attempts.get(email) || { count: 0 };
-    attempt.count++;
-    
-    if (attempt.count >= RATE_LIMIT_CONFIG.MAX_LOGIN_ATTEMPTS) {
-      attempt.lockedUntil = Date.now() + RATE_LIMIT_CONFIG.LOCKOUT_DURATION;
-    }
-    
-    this.attempts.set(email, attempt);
-  }
-
-  /**
-   * Limpa tentativas de login para um email
-   */
-  static clearAttempts(email: string): void {
-    this.attempts.delete(email);
-  }
-
-  /**
-   * Verifica se um email está bloqueado
-   */
-  static isLocked(email: string): boolean {
-    const attempt = this.attempts.get(email);
-    if (!attempt || !attempt.lockedUntil) return false;
-    
-    if (Date.now() > attempt.lockedUntil) {
-      this.clearAttempts(email);
-      return false;
-    }
-    
-    return true;
-  }
-
-  /**
-   * Obtém o tempo restante de bloqueio em segundos
-   */
-  static getLockTimeRemaining(email: string): number {
-    const attempt = this.attempts.get(email);
-    if (!attempt || !attempt.lockedUntil) return 0;
-    
-    const remaining = Math.ceil((attempt.lockedUntil - Date.now()) / 1000);
-    return Math.max(0, remaining);
-  }
-
-  /**
-   * Limpeza periódica do cache
-   */
-  static cleanup(): void {
-    const now = Date.now();
-    for (const [email, attempt] of this.attempts.entries()) {
-      if (attempt.lockedUntil && now > attempt.lockedUntil) {
-        this.attempts.delete(email);
-      }
-    }
-  }
-}
-
-// Executa limpeza periódica
-setInterval(() => LoginAttemptsCache.cleanup(), RATE_LIMIT_CONFIG.CLEANUP_INTERVAL);
+const loginLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 5,
+  message: 'Muitas tentativas de login. Tente novamente em 15 minutos.',
+});
 
 // ==================== UTILITÁRIOS DE JWT ====================
 
@@ -764,19 +693,24 @@ export const refreshAuthToken = async (refreshToken: string): Promise<{ token: s
  */
 export const logoutUser = async (userId: string): Promise<void> => {
   try {
-    // Por enquanto apenas log de auditoria
-    // Em implementação futura, poderia invalidar refresh tokens em banco
-    
+    // Esta implementação é um placeholder.
+    // Para um logout real que invalide o token, seria necessário um dos seguintes:
+    // 1. Blacklist de tokens: Armazenar o JTI (JWT ID) do token em um banco de dados
+    //    (como Redis) com um tempo de expiração igual ao do token.
+    // 2. Gerenciamento de sessão no servidor: Manter um registro de sessões ativas.
+    // Por simplicidade, esta função apenas registra o evento de logout.
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { email: true },
     });
 
-    await logAuthEvent('LOGOUT', userId, user?.email);
-
+    if (user) {
+      await logAuthEvent('LOGOUT', userId, user.email);
+    }
   } catch (error) {
-    console.error('[AUTH_SERVICE] Erro no logout:', error);
-    // Não quebra o fluxo se logout falhar
+    console.error('[AUTH_SERVICE] Erro no processo de logout:', error);
+    // Lança o erro para ser tratado pelo controller
+    throw new AppError('Erro ao registrar logout.', 500);
   }
 };
 

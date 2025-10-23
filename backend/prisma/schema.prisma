@@ -132,6 +132,7 @@ model User {
   earnings          Earning[]
   activityItems     ActivityItem[]
   notifications     Notification[]
+  redemptions       PremioRedemption[]
 
   // Índices
   @@index([email])
@@ -324,7 +325,26 @@ model Premio {
   @@index([category])
   @@index([priority])
 
+  // Relations
+  redemptions    PremioRedemption[]
+
   @@map("Premio")
+}
+
+model PremioRedemption {
+  id             String   @id @default(cuid())
+  premioId       String
+  userId         String
+  pointsRedeemed Int
+  status         String   @default("COMPLETED") // PENDING, COMPLETED, CANCELLED
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  premio Premio @relation(fields: [premioId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([premioId])
 }
 
 // ==================== MODELS DE SISTEMA ====================

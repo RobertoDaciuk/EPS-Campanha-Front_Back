@@ -26,7 +26,7 @@ import {
   ToggleCampaignStatusData,
   DuplicateCampaignData
 } from '../schemas/campaign.schema';
-// import { createActivityItem } from './activity.service'; // <-- ARQUIVO AUSENTE
+import { createActivityItem } from './activity.service';
 
 // ==================== INTERFACES E TIPOS ====================
 
@@ -774,79 +774,62 @@ export const calculateKitProgress = (
   let overallProgress = 0;
   const goalsStatus: KitProgressResult['goalsStatus'] = [];
   const validSubmissions = kit.submissions?.filter(
-      (sub: CampaignSubmission) => sub.status === CampaignSubmissionStatus.VALIDATED
+    (sub: CampaignSubmission) => sub.status === CampaignSubmissionStatus.VALIDATED
   ) || [];
 
-
   if (!goalRequirements || goalRequirements.length === 0) {
-      return { overallProgress: 0, goalsStatus: [] };
+    return { overallProgress: 100, goalsStatus: [] };
   }
-
 
   goalRequirements.forEach(goalRequirement => {
     let currentValue = 0;
-    let isCompleted = false;
+    const relevantSubmissions = validSubmissions.filter((sub: CampaignSubmission) =>
+      goalRequirement.conditions.every((cond: GoalCondition) => {
+        const subValue = sub.details?.[cond.field] ?? sub[cond.field as keyof CampaignSubmission];
+        if (subValue === undefined || subValue === null) return false;
+        const conditionValue = cond.value;
+        const submissionValueStr = String(subValue);
+        const submissionValueNum = Number(subValue);
+        const conditionValueNum = Number(conditionValue);
 
-    const relevantSubmissions = validSubmissions.filter((sub: CampaignSubmission) => {
-        return goalRequirement.conditions.every((cond: GoalCondition) => {
-            const subValue = sub.details?.[cond.field] ?? sub[cond.field as keyof CampaignSubmission];
-             if (subValue === undefined || subValue === null) return false;
+        switch (cond.operator) {
+          case GoalConditionOperator.EQUALS: return submissionValueStr === conditionValue;
+          case GoalConditionOperator.NOT_EQUALS: return submissionValueStr !== conditionValue;
+          case GoalConditionOperator.GREATER_THAN: return submissionValueNum > conditionValueNum;
+          case GoalConditionOperator.LESS_THAN: return submissionValueNum < conditionValueNum;
+          case GoalConditionOperator.CONTAINS: return submissionValueStr.includes(conditionValue);
+          case GoalConditionOperator.NOT_CONTAINS: return !submissionValueStr.includes(conditionValue);
+          default: return false;
+        }
+      })
+    );
 
-             const conditionValue = cond.value;
-             const submissionValue = String(subValue);
+    if (goalRequirement.type === GoalRequirementType.QUANTITY) {
+      currentValue = relevantSubmissions.length;
+    } else if (goalRequirement.type === GoalRequirementType.VALUE) {
+      currentValue = relevantSubmissions.reduce((sum, sub) => sum + (sub.value || 0), 0);
+    }
 
-             switch (cond.operator) {
-                 case GoalConditionOperator.EQUALS: return submissionValue === conditionValue;
-                 case GoalConditionOperator.NOT_EQUALS: return submissionValue !== conditionValue;
-                 case GoalConditionOperator.GREATER_THAN: return Number(submissionValue) > Number(conditionValue);
-                 case GoalConditionOperator.LESS_THAN: return Number(submissionValue) < Number(conditionValue);
-                 case GoalConditionOperator.CONTAINS: return submissionValue.includes(conditionValue);
-                 default: return false;
-             }
-         });
-     });
+    const goalProgress = goalRequirement.value > 0
+      ? Math.min(100, (currentValue / goalRequirement.value) * 100)
+      : 100;
 
-
-     if (goalRequirement.type === GoalRequirementType.QUANTITY) {
-         currentValue = relevantSubmissions.length;
-     } else if (goalRequirement.type === GoalRequirementType.VALUE) {
-         currentValue = relevantSubmissions.reduce((sum, sub) => sum + (sub.value || 0), 0);
-     }
-
-
-     let goalProgress = 0;
-     if (goalRequirement.value === 0) {
-         goalProgress = 100;
-         isCompleted = true;
-     } else {
-         goalProgress = (currentValue / goalRequirement.value) * 100;
-     }
-
-     goalProgress = Math.max(0, Math.min(100, goalProgress));
-
-     if (currentValue >= goalRequirement.value) {
-         isCompleted = true;
-         goalProgress = 100;
-     }
-
-
-     goalsStatus.push({
-         goalRequirementId: goalRequirement.id,
-         description: goalRequirement.description,
-         isCompleted: isCompleted,
-         currentValue: currentValue,
-         targetValue: goalRequirement.value,
-         progress: Math.round(goalProgress),
-     });
+    goalsStatus.push({
+      goalRequirementId: goalRequirement.id,
+      description: goalRequirement.description,
+      isCompleted: currentValue >= goalRequirement.value,
+      currentValue: currentValue,
+      targetValue: goalRequirement.value,
+      progress: Math.round(goalProgress),
+    });
   });
 
-
   if (goalsStatus.length > 0) {
-      const totalProgressSum = goalsStatus.reduce((sum, goal) => sum + goal.progress, 0);
-      overallProgress = Math.round(totalProgressSum / goalsStatus.length);
+    const totalProgressSum = goalsStatus.reduce((sum, goal) => sum + goal.progress, 0);
+    overallProgress = Math.round(totalProgressSum / goalsStatus.length);
+  } else {
+    overallProgress = 100;
   }
-
-  overallProgress = Math.max(0, Math.min(100, overallProgress));
 
   return { overallProgress, goalsStatus };
 };

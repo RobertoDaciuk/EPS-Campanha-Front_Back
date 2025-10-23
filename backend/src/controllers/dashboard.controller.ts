@@ -90,14 +90,6 @@ export const getDashboardDataHandler = async (
   reply: FastifyReply
 ): Promise<void> => {
   try {
-    if (!request.user) {
-      return reply.code(401).send({
-        success: false,
-        error: 'Não autenticado',
-        message: 'Login necessário para acessar o dashboard',
-      });
-    }
-
     let dashboardData;
     const { period = '30d', includeDetails = 'true' } = request.query;
 
@@ -169,32 +161,15 @@ export const getRankingHandler = async (
       page = '1'
     } = request.query;
     
-    const limitNum = Math.min(parseInt(limit) || 50, 100); // Máximo 100
+    const limitNum = Math.min(parseInt(limit) || 50, 100);
     const pageNum = Math.max(parseInt(page) || 1, 1);
-    
-    // Calcula offset para paginação
-    const offset = (pageNum - 1) * limitNum;
-    const ranking = await getRankingData(
-      filter as any, 
-      request.user?.id, 
-      limitNum + offset // Busca mais para permitir paginação
-    );
 
-    // Aplica paginação manual
-    const paginatedRanking = ranking.slice(offset, offset + limitNum);
-    const hasMore = ranking.length > offset + limitNum;
-
-    // Encontra posição do usuário atual se não estiver na página atual
-    let currentUserPosition = null;
-    if (request.user?.id) {
-      const userRankItem = ranking.find(item => item.userId === request.user.id);
-      if (userRankItem && !paginatedRanking.find(item => item.userId === request.user.id)) {
-        currentUserPosition = {
-          ...userRankItem,
-          isCurrentPage: false,
-        };
-      }
-    }
+    const result = await getRankingData({
+      filter: filter as any,
+      limit: limitNum,
+      page: pageNum,
+      userId: request.user?.id,
+    });
 
     return reply.code(200).send({
       success: true,

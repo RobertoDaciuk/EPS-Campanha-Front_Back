@@ -103,15 +103,7 @@ export const createCampaignHandler = async (
   reply: FastifyReply
 ): Promise<void> => {
   try {
-    if (!request.user || request.user.role !== UserRole.ADMIN) {
-      return reply.code(403).send({
-        success: false,
-        error: 'Acesso negado',
-        message: 'Apenas administradores podem criar campanhas',
-      });
-    }
-
-    const campaign = await createCampaign(request.body);
+    const campaign = await createCampaign(request.body, request.user!.id);
 
     console.log(`[CAMPAIGN_CONTROLLER] Campanha criada: ${campaign.title} por ${request.user.email}`);
 
@@ -519,52 +511,7 @@ export const duplicateCampaignHandler = async (
   reply: FastifyReply
 ): Promise<void> => {
   try {
-    if (!request.user || request.user.role !== UserRole.ADMIN) {
-      return reply.code(403).send({
-        success: false,
-        error: 'Acesso negado',
-        message: 'Apenas administradores podem duplicar campanhas',
-      });
-    }
-
-    const { campaignId, newTitle, startDate, endDate, adjustPoints } = request.body;
-
-    // Busca campanha original
-    const originalCampaign = await getCampaignById(campaignId);
-    
-    if (!originalCampaign) {
-      return reply.code(404).send({
-        success: false,
-        error: 'Campanha original não encontrada',
-        message: 'A campanha a ser duplicada não existe',
-      });
-    }
-
-    // Prepara dados da nova campanha
-    const newCampaignData: CreateCampaignData = {
-      title: newTitle,
-      description: originalCampaign.description,
-      imageUrl: originalCampaign.imageUrl,
-      startDate,
-      endDate,
-      pointsOnCompletion: originalCampaign.pointsOnCompletion ? 
-        Math.max(1, originalCampaign.pointsOnCompletion + adjustPoints) : undefined,
-      managerPointsPercentage: originalCampaign.managerPointsPercentage,
-      goalRequirements: originalCampaign.goalRequirements?.map(req => ({
-        description: req.description,
-        quantity: req.quantity,
-        unitType: req.unitType,
-        conditions: req.conditions?.map(cond => ({
-          field: cond.field,
-          operator: cond.operator,
-          value: cond.value,
-        })) || [],
-      })),
-      points: originalCampaign.points,
-      goal: originalCampaign.goal,
-    };
-
-    const newCampaign = await createCampaign(newCampaignData);
+    const newCampaign = await duplicateCampaign(request.body, request.user!.id);
 
     console.log(`[CAMPAIGN_CONTROLLER] Campanha duplicada: ${originalCampaign.title} → ${newTitle} por ${request.user.email}`);
 

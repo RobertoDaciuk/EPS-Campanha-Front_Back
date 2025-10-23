@@ -462,66 +462,6 @@ export async function campaignRoutes(
   });
 
   // Hook para validação de datas em campanhas
-  fastify.addHook('preHandler', async (request, reply) => {
-    if ((request.method === 'POST' || request.method === 'PUT') && request.body) {
-      const body = request.body as any;
-      
-      // Valida datas se estiverem presentes
-      if (body.startDate && body.endDate) {
-        const startDate = new Date(body.startDate);
-        const endDate = new Date(body.endDate);
-        
-        if (startDate >= endDate) {
-          reply.code(400).send({
-            success: false,
-            error: 'Datas inválidas',
-            message: 'Data de início deve ser anterior à data de fim',
-          });
-          return;
-        }
-        
-        // Verifica se não é muito no passado para campanhas novas
-        if (request.method === 'POST') {
-          const oneYearAgo = new Date();
-          oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-          
-          if (startDate < oneYearAgo) {
-            reply.code(400).send({
-              success: false,
-              error: 'Data inválida',
-              message: 'Data de início não pode ser mais de um ano no passado',
-            });
-            return;
-          }
-        }
-      }
-    }
-  });
-
-  // Hook para cache específico de campanhas
-  fastify.addHook('onSend', async (request, reply, payload) => {
-    // Lista de campanhas ativas pode ser cacheada por pouco tempo
-    if (request.method === 'GET' && request.url.includes('/active')) {
-      reply.header('Cache-Control', 'private, max-age=180'); // 3 minutos
-    }
-
-    // Estatísticas podem ser cacheadas por mais tempo
-    if (request.url.includes('/stats') || request.url.includes('/performance')) {
-      reply.header('Cache-Control', 'private, max-age=600'); // 10 minutos
-    }
-
-    // Detalhes de campanha específica podem ter cache médio
-    if (request.method === 'GET' && request.url.match(/\/campaigns\/[^\/]+$/)) {
-      reply.header('Cache-Control', 'private, max-age=300'); // 5 minutos
-    }
-
-    // Operações de modificação não devem ser cacheadas
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
-      reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-    }
-
-    return payload;
-  });
 
   // Hook para validar permissões específicas de campanha
   fastify.addHook('preHandler', async (request, reply) => {
